@@ -219,7 +219,7 @@ export default function PricingPage() {
                 Do you offer refunds?
               </h3>
               <p className="text-slate-400">
-                We're confident you'll love SmarterTips. If you have issues within the first 7 days, contact support for assistance.
+                We are confident you will love SmarterTips. If you have issues within the first 7 days, contact support for assistance.
               </p>
             </div>
 

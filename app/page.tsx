@@ -154,7 +154,7 @@ export default function ToolsDashboard() {
             More tools coming soon
           </h3>
           <p className="text-slate-400">
-            We're constantly adding new features to help you make better betting decisions
+            We are constantly adding new features to help you make better betting decisions
           </p>
         </div>
       </div>

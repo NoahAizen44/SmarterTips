@@ -26,8 +26,9 @@ export default function SignUp() {
       setTimeout(() => {
         router.push('/login?message=Check your email to confirm your account');
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign up');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to sign up';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
