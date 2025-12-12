@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     const team_data = Array.from(pivoted.values()).filter(
-      (r: any) => r.team.toLowerCase() === team.toLowerCase()
+      (r: Record<string, unknown>) => (r.team as string).toLowerCase() === team.toLowerCase()
     )
 
     if (team_data.length === 0) {
@@ -59,19 +59,19 @@ export async function POST(request: NextRequest) {
     const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
     for (const position of POSITIONS) {
-      const pos_teams = Array.from(pivoted.values()).filter((r: any) => r.position === position)
-      const team_for_pos = team_data.find((r: any) => r.position === position)
+      const pos_teams = Array.from(pivoted.values()).filter((r: Record<string, unknown>) => r.position === position)
+      const team_for_pos = team_data.find((r: Record<string, unknown>) => r.position === position)
 
       if (!team_for_pos) continue
 
       for (const stat of selected_stats) {
         const stat_lower = stat.toLowerCase()
-        const team_val = team_for_pos[stat_lower]
+        const team_val = team_for_pos[stat_lower] as number
         if (!team_val) continue
 
-        const avg = pos_teams.reduce((sum: number, r: any) => sum + (r[stat_lower] || 0), 0) / pos_teams.length
+        const avg = pos_teams.reduce((sum: number, r: Record<string, unknown>) => sum + ((r[stat_lower] as number) || 0), 0) / pos_teams.length
         const pct_diff = ((team_val - avg) / avg) * 100
-        const rank = pos_teams.filter((r: any) => r[stat_lower] < team_val).length + 1
+        const rank = pos_teams.filter((r: Record<string, unknown>) => (r[stat_lower] as number) < team_val).length + 1
 
         results.push({
           team: team,
@@ -86,8 +86,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ team, time_period, results: results.slice(0, 20) })
-  } catch (err: any) {
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Internal server error';
     console.error(err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

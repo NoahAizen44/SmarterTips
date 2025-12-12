@@ -49,10 +49,11 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ profile: data })
-  } catch (err: any) {
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Internal server error';
     console.error('Server error:', err)
     return NextResponse.json(
-      { error: err.message || 'Internal server error' },
+      { error: errorMessage },
       { status: 500 }
     )
   }

@@ -60,7 +60,7 @@ export default function CheckoutCancelPage() {
           </p>
 
           <p className="text-slate-500 text-sm mb-8">
-            No charge was made to your account. You can try again whenever you're ready.
+            No charge was made to your account. You can try again whenever you are ready.
           </p>
 
           <div className="space-y-3">
