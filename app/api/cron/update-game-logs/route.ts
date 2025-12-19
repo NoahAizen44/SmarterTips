@@ -40,7 +40,11 @@ const TEAM_IDS: Record<string, number> = {
   'Washington Wizards': 1610612764,
 }
 
-async function fetchGameLogsFromAPI(teamName: string): Promise<any[]> {
+interface GameLogRow {
+  [key: number]: unknown
+}
+
+async function fetchGameLogsFromAPI(teamName: string): Promise<GameLogRow[]> {
   /**
    * Fetch game logs from nba_api via python microservice or direct API call
    * Since nba_api is Python-only, we'll make requests to stats.nba.com directly
@@ -60,8 +64,9 @@ async function fetchGameLogsFromAPI(teamName: string): Promise<any[]> {
 
     if (!response.ok) return []
 
-    const data = await response.json()
-    return data.resultSets?.[0]?.rowSet || []
+    const data = await response.json() as Record<string, unknown>
+    const resultSets = data.resultSets as Array<{rowSet?: GameLogRow[]}>
+    return resultSets?.[0]?.rowSet || []
   } catch (error) {
     console.error(`Error fetching ${teamName}:`, error)
     return []
@@ -80,7 +85,9 @@ async function updateTeamGameLogs(teamName: string): Promise<number> {
       .order('game_date', { ascending: false })
       .limit(1)
 
-    const lastGameDate = latest?.[0]?.game_date ? new Date(latest[0].game_date) : new Date('2025-10-01')
+    const lastGameDate = latest && latest.length > 0 && typeof latest[0] === 'object' && 'game_date' in latest[0]
+      ? new Date(latest[0].game_date as string)
+      : new Date('2025-10-01')
 
     // Fetch new game logs from API
     const newGames = await fetchGameLogsFromAPI(teamName)
@@ -91,18 +98,17 @@ async function updateTeamGameLogs(teamName: string): Promise<number> {
     }
 
     // Filter for games after the last recorded date and prepare data
-    const gamesToInsert: any[] = []
+    const gamesToInsert: Array<Record<string, unknown>> = []
 
     for (const game of newGames) {
-      const gameDate = new Date(game[3]) // Game date is typically in column 3
+      const gameDate = new Date(game[3] as string)
       if (gameDate <= lastGameDate) continue
 
       // Map the game data to our schema
-      // This depends on the actual nba_api response format
       gamesToInsert.push({
         team: teamName,
-        player_id: game[4], // Adjust based on actual column
-        player_name: game[5], // Adjust based on actual column
+        player_id: game[4],
+        player_name: game[5],
         game_date: game[3],
         game_id: game[2],
         position: game[6] || null,
