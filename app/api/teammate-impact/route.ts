@@ -7,6 +7,24 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+interface GameLog {
+  id: string
+  team: string
+  player_id: number
+  player_name: string
+  position: string
+  game_date: string
+  game_id: number
+  pts: number
+  reb: number
+  ast: number
+  '3pm': number
+  '3pa': number
+  stl: number
+  blk: number
+  season: number
+}
+
 interface PlayerImpact {
   player: string
   with_star: number
@@ -17,35 +35,83 @@ interface PlayerImpact {
   games_without_star: number
 }
 
-interface GameLog {
-  player_name: string
-  game_id: string
-  [key: string]: string | number | null
+// Validation helpers
+const VALID_STATS = ['PTS', 'REB', 'AST', '3PM', '3PA', 'STL', 'BLK']
+const ALL_TEAMS = Object.keys(PLAYERS_BY_TEAM)
+
+function validateTeam(team: unknown): string | null {
+  if (typeof team !== 'string') return null
+  if (!ALL_TEAMS.includes(team)) return null
+  return team
+}
+
+function validatePlayer(player: unknown): string | null {
+  if (typeof player !== 'string') return null
+  if (player.length < 1 || player.length > 100) return null
+  // Basic sanitization - allow letters, spaces, apostrophes, hyphens, dots
+  if (!/^[a-zA-Z\s\-'.]*$/.test(player)) return null
+  return player
+}
+
+function validateStat(stat: unknown): string {
+  if (typeof stat !== 'string') return 'PTS'
+  if (!VALID_STATS.includes(stat.toUpperCase())) return 'PTS'
+  return stat.toUpperCase()
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { team, absent_player, stat = 'PTS' } = body
-
-    if (!team || !absent_player) {
+    // Parse JSON with error handling
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch (parseError) {
       return NextResponse.json(
-        { error: 'Team and absent_player required' },
+        { error: 'Invalid JSON in request body' },
         { status: 400 }
       )
     }
 
-    // Get all games for the team
-    const { data: gameData, error: gameError } = await supabase
+    // Validate inputs
+    const rawTeam = (body as Record<string, unknown>)?.team
+    const rawPlayer = (body as Record<string, unknown>)?.absent_player
+    const rawStat = (body as Record<string, unknown>)?.stat
+
+    const team = validateTeam(rawTeam)
+    if (!team) {
+      return NextResponse.json(
+        { error: 'Invalid or missing team parameter' },
+        { status: 400 }
+      )
+    }
+
+    const absent_player = validatePlayer(rawPlayer)
+    if (!absent_player) {
+      return NextResponse.json(
+        { error: 'Invalid or missing absent_player parameter' },
+        { status: 400 }
+      )
+    }
+
+    const stat = validateStat(rawStat)
+
+    // Fetch game data for the team
+    const { data: gameData, error } = await supabase
       .from('player_game_logs')
       .select('*')
       .eq('team', team)
-      .order('game_date', { ascending: false })
 
-    if (gameError) throw gameError
+    if (error) {
+      console.error('Database error:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch game data' },
+        { status: 500 }
+      )
+    }
+
     if (!gameData || gameData.length === 0) {
       return NextResponse.json(
-        { error: `No game data found for ${team}` },
+        { error: `No game data found for team ${team}` },
         { status: 404 }
       )
     }
@@ -149,73 +215,52 @@ export async function POST(request: NextRequest) {
       team,
       absent_player,
       stat,
-      star_player: absent_player,
-      rankings: impactResults,
+      results: impactResults,
     })
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Internal server error'
-    console.error(err)
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+  } catch (error) {
+    console.error('Unexpected error in POST:', error)
+    return NextResponse.json(
+      { error: 'An unexpected error occurred' },
+      { status: 500 }
+    )
   }
 }
 
-// GET endpoint to fetch teams and players
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const action = searchParams.get('action')
-    const team = searchParams.get('team')
+    const rawTeam = searchParams.get('team')
 
-    if (action === 'teams') {
-      // All 30 NBA teams
-      const teams = [
-        'Atlanta Hawks',
-        'Boston Celtics',
-        'Brooklyn Nets',
-        'Charlotte Hornets',
-        'Chicago Bulls',
-        'Cleveland Cavaliers',
-        'Dallas Mavericks',
-        'Denver Nuggets',
-        'Detroit Pistons',
-        'Golden State Warriors',
-        'Houston Rockets',
-        'Indiana Pacers',
-        'Los Angeles Clippers',
-        'Los Angeles Lakers',
-        'Memphis Grizzlies',
-        'Miami Heat',
-        'Milwaukee Bucks',
-        'Minnesota Timberwolves',
-        'New Orleans Pelicans',
-        'New York Knicks',
-        'Oklahoma City Thunder',
-        'Orlando Magic',
-        'Philadelphia 76ers',
-        'Phoenix Suns',
-        'Portland Trail Blazers',
-        'Sacramento Kings',
-        'San Antonio Spurs',
-        'Toronto Raptors',
-        'Utah Jazz',
-        'Washington Wizards',
-      ]
-      return NextResponse.json({ success: true, teams })
+    // Validate action
+    if (action === 'players') {
+      const team = validateTeam(rawTeam)
+      if (!team) {
+        return NextResponse.json(
+          { error: 'Invalid or missing team parameter' },
+          { status: 400 }
+        )
+      }
+
+      const players = PLAYERS_BY_TEAM[team] || []
+      return NextResponse.json({
+        team,
+        players,
+        count: players.length,
+      })
     }
 
-    if (action === 'players' && team) {
-      // Get players for a team from hardcoded data (instant loading)
-      const players = PLAYERS_BY_TEAM[team as keyof typeof PLAYERS_BY_TEAM] || []
-      return NextResponse.json({ success: true, players })
-    }
-
+    // Default: return teams
+    const teams = Object.keys(PLAYERS_BY_TEAM)
+    return NextResponse.json({
+      teams,
+      count: teams.length,
+    })
+  } catch (error) {
+    console.error('Unexpected error in GET:', error)
     return NextResponse.json(
-      { error: 'Invalid action or missing parameters' },
-      { status: 400 }
+      { error: 'An unexpected error occurred' },
+      { status: 500 }
     )
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Internal server error'
-    console.error('GET error:', errorMessage, err)
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }
