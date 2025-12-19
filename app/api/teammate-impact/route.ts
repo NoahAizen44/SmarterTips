@@ -7,17 +7,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-interface GameStat {
-  player_name: string
-  pts: number
-  reb: number
-  ast: number
-  '3pm': number
-  '3pa': number
-  stl: number
-  blk: number
-}
-
 interface PlayerImpact {
   player: string
   with_star: number

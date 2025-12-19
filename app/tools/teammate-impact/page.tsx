@@ -127,7 +127,7 @@ function TeammateImpactContent() {
       const data = await res.json()
 
       if (res.ok && data.success) {
-        let results = data.rankings
+        const results = data.rankings
 
         // Sort results
         if (sortBy === 'ascending') {
