@@ -28,6 +28,12 @@ interface PlayerImpact {
   games_without_star: number
 }
 
+interface GameLog {
+  player_name: string
+  game_id: string
+  [key: string]: string | number | null
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -56,12 +62,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Get all unique players on team
-    const playerSet = new Set(gameData.map((g: any) => g.player_name))
+    const playerSet = new Set(gameData.map((g: GameLog) => g.player_name))
     const teamPlayers = Array.from(playerSet)
 
     // Find the absent player
     const absentPlayerData = gameData.filter(
-      (g: any) => g.player_name === absent_player
+      (g: GameLog) => g.player_name === absent_player
     )
 
     if (absentPlayerData.length === 0) {
@@ -73,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     // Get games where absent player played vs didn't play
     const gamesWithAbsentPlayer = new Set(
-      absentPlayerData.map((g: any) => g.game_id)
+      absentPlayerData.map((g: GameLog) => g.game_id)
     )
 
     // Calculate stats for each teammate
@@ -83,16 +89,16 @@ export async function POST(request: NextRequest) {
     for (const playerName of teamPlayers) {
       if (playerName === absent_player) continue
 
-      const playerGames = gameData.filter((g: any) => g.player_name === playerName)
+      const playerGames = gameData.filter((g: GameLog) => g.player_name === playerName)
 
       if (playerGames.length === 0) continue
 
       // Split games: with and without absent player
       const gamesWithoutAbsentPlayer = playerGames.filter(
-        (g: any) => !gamesWithAbsentPlayer.has(g.game_id)
+        (g: GameLog) => !gamesWithAbsentPlayer.has(g.game_id)
       )
       const gamesWithAbsentPlayerPresent = playerGames.filter(
-        (g: any) => gamesWithAbsentPlayer.has(g.game_id)
+        (g: GameLog) => gamesWithAbsentPlayer.has(g.game_id)
       )
 
       // Calculate average stat when absent player is playing
@@ -120,8 +126,8 @@ export async function POST(request: NextRequest) {
       // Only include players who have games in both scenarios
       if (gamesWithAbsentPlayerPresent.length > 0 && gamesWithoutAbsentPlayer.length > 0) {
         // Count unique games (not rows, in case of duplicates)
-        const uniqueGamesWithStar = new Set(gamesWithAbsentPlayerPresent.map((g: any) => g.game_id)).size
-        const uniqueGamesWithoutStar = new Set(gamesWithoutAbsentPlayer.map((g: any) => g.game_id)).size
+        const uniqueGamesWithStar = new Set(gamesWithAbsentPlayerPresent.map((g: GameLog) => g.game_id)).size
+        const uniqueGamesWithoutStar = new Set(gamesWithoutAbsentPlayer.map((g: GameLog) => g.game_id)).size
         
         impactResults.push({
           player: playerName,
