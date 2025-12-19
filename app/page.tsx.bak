@@ -53,6 +53,7 @@ export default function ToolsDashboard() {
       icon: '👥',
       color: 'from-purple-500 to-purple-600',
       href: '/tools/teammate-impact',
+      disabled: true,
     },
     {
       id: 'line-comparison',
