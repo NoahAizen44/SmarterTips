@@ -1,7 +1,6 @@
 'use client';
 
 import { useAuth } from '@/app/lib/auth-context';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ReactNode } from 'react';
 
@@ -16,7 +15,6 @@ export default function ProtectedToolWrapper({
   toolName,
   toolDescription,
 }: ProtectedToolWrapperProps) {
-  const router = useRouter();
   const { profile, loading } = useAuth();
 
   // Still loading
