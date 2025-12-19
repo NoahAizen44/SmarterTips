@@ -93,14 +93,20 @@ export async function POST(request: NextRequest) {
       // Calculate average stat when absent player is playing
       const withStarAvg =
         gamesWithAbsentPlayerPresent.length > 0
-          ? gamesWithAbsentPlayerPresent.reduce((sum, g: GameLog) => sum + (g[statKey as keyof GameLog] as number || 0), 0) /
+          ? gamesWithAbsentPlayerPresent.reduce((sum, g: GameLog) => {
+              const val = (g[statKey as keyof GameLog] as number) || 0
+              return sum + val
+            }, 0) /
             gamesWithAbsentPlayerPresent.length
           : 0
 
       // Calculate average stat when absent player is NOT playing
       const withoutStarAvg =
         gamesWithoutAbsentPlayer.length > 0
-          ? gamesWithoutAbsentPlayer.reduce((sum, g: GameLog) => sum + (g[statKey as keyof GameLog] as number || 0), 0) /
+          ? gamesWithoutAbsentPlayer.reduce((sum, g: GameLog) => {
+              const val = (g[statKey as keyof GameLog] as number) || 0
+              return sum + val
+            }, 0) /
             gamesWithoutAbsentPlayer.length
           : 0
 
