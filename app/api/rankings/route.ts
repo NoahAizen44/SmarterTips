@@ -1,11 +1,22 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, badRequest, serverError } from '@/lib/apiAuth'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
+
+// Helper functions
+function badRequest(message: string) {
+  return NextResponse.json({ error: message }, { status: 400 })
+}
+
+function serverError() {
+  return NextResponse.json(
+    { error: 'An unexpected error occurred' },
+    { status: 500 }
+  )
+}
 
 // Valid stats list
 const VALID_STATS = ['PTS', 'REB', 'AST', 'FG%', 'FT%', 'TOV', '3PM', '3PA']
@@ -38,10 +49,7 @@ function isValidTimePeriod(period: unknown): period is string {
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Verify the user is authenticated
-    await requireAuth(request)
-
-    // 2. Parse request body
+    // 1. Parse request body (no auth required - free tool)
     let body: unknown
     try {
       body = await request.json()
@@ -49,7 +57,7 @@ export async function POST(request: NextRequest) {
       return badRequest('Invalid JSON in request body')
     }
 
-    // 3. Extract and validate inputs
+    // 2. Extract and validate inputs
     const rawTeam = (body as Record<string, unknown>)?.team
     const rawStats = (body as Record<string, unknown>)?.selected_stats
     const rawTimePeriod = (body as Record<string, unknown>)?.time_period
@@ -64,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     const timePeriod = isValidTimePeriod(rawTimePeriod) ? rawTimePeriod : '2025-26'
 
-    // 4. Query Supabase with validated inputs
+    // 3. Query Supabase with validated inputs
     const { data, error } = await supabase
       .from('nba_stats')
       .select('*')
@@ -79,7 +87,7 @@ export async function POST(request: NextRequest) {
       return badRequest('No data found for the requested time period')
     }
 
-    // 5. Pivot data (group by team+position, put stats in columns)
+    // 4. Pivot data (group by team+position, put stats in columns)
     const pivoted = new Map()
     for (const row of data as Array<Record<string, unknown>>) {
       const team = row.team as string
@@ -95,7 +103,7 @@ export async function POST(request: NextRequest) {
       pivoted.get(key)[statName] = value
     }
 
-    // 6. Filter for requested team
+    // 5. Filter for requested team
     const teamData = Array.from(pivoted.values()).filter(
       (r: Record<string, unknown>) => (r.team as string).toLowerCase() === rawTeam.toLowerCase()
     )
@@ -104,7 +112,7 @@ export async function POST(request: NextRequest) {
       return badRequest('Team not found')
     }
 
-    // 7. Calculate rankings
+    // 6. Calculate rankings
     const results: Array<Record<string, unknown>> = []
     const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
@@ -152,13 +160,6 @@ export async function POST(request: NextRequest) {
       results: results.slice(0, 20),
     })
   } catch (err) {
-    if (err instanceof Error && err.message === 'UNAUTHORIZED') {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     console.error('Server error:', err)
     return serverError()
   }
