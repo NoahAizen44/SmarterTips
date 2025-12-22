@@ -35,7 +35,8 @@ export default function DefenseRankings() {
   const [selectedTeams, setSelectedTeams] = useState<string[]>(['Atlanta']);
   const [selectedStats, setSelectedStats] = useState<string[]>(['PTS']);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('2025-26');
-  const [sortBy, setSortBy] = useState<'rank' | 'pct_diff'>('rank');
+  const [sortColumn, setSortColumn] = useState<keyof RankingResult>('rank');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<RankingResult[] | null>(null);
@@ -109,21 +110,39 @@ export default function DefenseRankings() {
         allResults.push(...data.results);
       }
 
-      // Sort results based on selected sort option
-      const sorted = [...allResults].sort((a, b) => {
-        if (sortBy === 'pct_diff') {
-          return b.pct_diff - a.pct_diff;
-        } else {
-          return a.rank - b.rank;
-        }
-      });
-
-      setResults(sorted);
+      // Don't sort here - user will click headers to sort
+      setResults(allResults);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSort = (col: keyof RankingResult) => {
+    if (sortColumn === col) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(col);
+      setSortDir('asc');
+    }
+  };
+
+  const getSorted = () => {
+    if (!results) return [];
+    return [...results].sort((a, b) => {
+      const aVal = a[sortColumn];
+      const bVal = b[sortColumn];
+      
+      let cmp = 0;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        cmp = aVal.localeCompare(bVal);
+      } else if (typeof aVal === 'number' && typeof bVal === 'number') {
+        cmp = aVal - bVal;
+      }
+      
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
   };
 
   const getPositionColor = (pct_diff: number): string => {
@@ -230,37 +249,6 @@ export default function DefenseRankings() {
                 </div>
               </div>
 
-              {/* Sort By */}
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-slate-100 mb-3">
-                  Sort By
-                </label>
-                <div className="space-y-2">
-                  <label className="flex items-center cursor-pointer">
-                    <input
-                      type="radio"
-                      name="sortBy"
-                      value="rank"
-                      checked={sortBy === 'rank'}
-                      onChange={(e) => setSortBy(e.target.value as 'rank' | 'pct_diff')}
-                      className="w-4 h-4 text-blue-500 bg-slate-700 border-slate-600 focus:ring-2 focus:ring-blue-500"
-                    />
-                    <span className="ml-3 text-slate-300">Best Rank</span>
-                  </label>
-                  <label className="flex items-center cursor-pointer">
-                    <input
-                      type="radio"
-                      name="sortBy"
-                      value="pct_diff"
-                      checked={sortBy === 'pct_diff'}
-                      onChange={(e) => setSortBy(e.target.value as 'rank' | 'pct_diff')}
-                      className="w-4 h-4 text-blue-500 bg-slate-700 border-slate-600 focus:ring-2 focus:ring-blue-500"
-                    />
-                    <span className="ml-3 text-slate-300">Highest Difference %</span>
-                  </label>
-                </div>
-              </div>
-
               {/* Submit Button */}
               <button
                 type="submit"
@@ -287,16 +275,16 @@ export default function DefenseRankings() {
                   <table className="w-full">
                     <thead className="bg-slate-700 border-b border-slate-600">
                       <tr>
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-slate-100">Team</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-slate-100">Stat</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-slate-100">Position</th>
-                        <th className="px-6 py-4 text-right text-sm font-semibold text-slate-100">Value</th>
-                        <th className="px-6 py-4 text-right text-sm font-semibold text-slate-100">vs Avg</th>
-                        <th className="px-6 py-4 text-right text-sm font-semibold text-slate-100">Rank</th>
+                        <th onClick={() => handleSort('team')} className="px-6 py-4 text-left text-sm font-semibold text-slate-300 cursor-pointer hover:text-blue-400">Team {sortColumn === 'team' && (sortDir === 'asc' ? '▲' : '▼')}</th>
+                        <th onClick={() => handleSort('stat')} className="px-6 py-4 text-left text-sm font-semibold text-slate-300 cursor-pointer hover:text-blue-400">Stat {sortColumn === 'stat' && (sortDir === 'asc' ? '▲' : '▼')}</th>
+                        <th onClick={() => handleSort('position')} className="px-6 py-4 text-left text-sm font-semibold text-slate-300 cursor-pointer hover:text-blue-400">Position {sortColumn === 'position' && (sortDir === 'asc' ? '▲' : '▼')}</th>
+                        <th onClick={() => handleSort('value')} className="px-6 py-4 text-right text-sm font-semibold text-slate-300 cursor-pointer hover:text-blue-400">Value {sortColumn === 'value' && (sortDir === 'asc' ? '▲' : '▼')}</th>
+                        <th onClick={() => handleSort('pct_diff')} className="px-6 py-4 text-right text-sm font-semibold text-slate-300 cursor-pointer hover:text-blue-400">vs Avg {sortColumn === 'pct_diff' && (sortDir === 'asc' ? '▲' : '▼')}</th>
+                        <th onClick={() => handleSort('rank')} className="px-6 py-4 text-right text-sm font-semibold text-slate-300 cursor-pointer hover:text-blue-400">Rank {sortColumn === 'rank' && (sortDir === 'asc' ? '▲' : '▼')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
-                      {results.map((result, idx) => (
+                      {getSorted().map((result, idx) => (
                         <tr key={idx} className="hover:bg-slate-700 transition-colors">
                           <td className="px-6 py-4 text-sm font-semibold text-blue-400">{result.team}</td>
                           <td className="px-6 py-4 text-sm font-semibold text-white">{result.stat}</td>
