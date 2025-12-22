@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/app/lib/auth-context';
+import { createClient } from '@supabase/supabase-js';
 
 const NBA_TEAMS = [
   'Atlanta', 'Boston', 'Brooklyn', 'Charlotte', 'Chicago', 'Cleveland', 'Dallas', 'Denver',
@@ -39,6 +40,26 @@ export default function DefenseRankings() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<RankingResult[] | null>(null);
+  const [authToken, setAuthToken] = useState<string>('');
+
+  // Get auth token on mount
+  useEffect(() => {
+    const getToken = async () => {
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        setAuthToken(session.access_token);
+      }
+    };
+
+    if (user) {
+      getToken();
+    }
+  }, [user]);
 
   const handleSignOut = () => {
     // Call signOut but don't wait for it
@@ -97,6 +118,7 @@ export default function DefenseRankings() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
           },
           body: JSON.stringify({
             team: team,
