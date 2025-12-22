@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/app/lib/auth-context';
 
@@ -32,7 +31,6 @@ interface RankingResponse {
 }
 
 export default function DefenseRankings() {
-  const router = useRouter();
   const { user, profile, loading: authLoading, signOut } = useAuth();
   const [selectedTeams, setSelectedTeams] = useState<string[]>(['Atlanta']);
   const [selectedStats, setSelectedStats] = useState<string[]>(['PTS']);
@@ -41,13 +39,6 @@ export default function DefenseRankings() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<RankingResult[] | null>(null);
-
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login');
-    }
-  }, [user, authLoading, router]);
 
   const handleSignOut = () => {
     // Call signOut but don't wait for it

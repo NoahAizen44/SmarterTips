@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, Suspense } from 'react'
 import { useAuth } from '@/app/lib/auth-context'
-import { useRouter } from 'next/navigation'
 
 const STATS_LIST = ['PTS', 'REB', 'AST', '3PM', '3PA', 'STL', 'BLK']
 
@@ -17,9 +16,7 @@ interface PlayerImpact {
 }
 
 function TeammateImpactContent() {
-  const { user, loading: authLoading } = useAuth()
-  const router = useRouter()
-
+  const { loading: authLoading } = useAuth()
   const [selectedTeam, setSelectedTeam] = useState('')
   const [teamsDropdownOpen, setTeamsDropdownOpen] = useState(false)
   const [selectedStat, setSelectedStat] = useState('PTS')
@@ -32,13 +29,6 @@ function TeammateImpactContent() {
   const [rankings, setRankings] = useState<PlayerImpact[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login')
-    }
-  }, [user, authLoading, router])
 
   // Fetch teams on mount
   useEffect(() => {
