@@ -175,7 +175,7 @@ function TeammateImpactContent() {
                     {selectedTeam || 'Select team'}
                   </button>
                   {teamsDropdownOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
                       {teams.map((team) => (
                         <button
                           key={team}
@@ -206,7 +206,7 @@ function TeammateImpactContent() {
                     {selectedAbsentPlayer || 'Select player'}
                   </button>
                   {playersDropdownOpen && teamPlayers.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
                       {teamPlayers.map((player) => (
                         <button
                           key={player}
