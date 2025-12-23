@@ -116,10 +116,18 @@ async function backfillTeamStats(teamName: string): Promise<number> {
           .from('player_game_logs')
           .update({
             gp: game[7] || 1,           // Games Played
+            ftm: game[13] || 0,         // Free Throws Made
+            fta: game[14] || 0,         // Free Throws Attempted
             fga: game[15] || 0,         // Field Goals Attempted
-            fta: game[18] || 0,         // Free Throws Attempted
-            tov: game[25] || 0,         // Turnovers
-            pf: game[26] || 0,          // Personal Fouls
+            fgm: game[16] || 0,         // Field Goals Made
+            min: game[17] || 0,         // Minutes Played
+            tov: game[18] || 0,         // Turnovers
+            pf: game[19] || 0,          // Personal Fouls
+            stl: game[20] || 0,         // Steals
+            blk: game[21] || 0,         // Blocks
+            fg_pct: game[22] || 0,      // Field Goal %
+            fg3_pct: game[23] || 0,     // 3-Point %
+            ft_pct: game[24] || 0,      // Free Throw %
           })
           .eq('id', recordId)
 

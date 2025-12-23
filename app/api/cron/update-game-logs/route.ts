@@ -119,12 +119,18 @@ async function updateTeamGameLogs(teamName: string): Promise<number> {
         ast: game[10] || 0,         // Assists
         '3pm': game[11] || 0,       // 3-Pointers Made
         '3pa': game[12] || 0,       // 3-Pointers Attempted
+        ftm: game[13] || 0,         // Free Throws Made
+        fta: game[14] || 0,         // Free Throws Attempted
         fga: game[15] || 0,         // Field Goals Attempted
-        fta: game[18] || 0,         // Free Throws Attempted
-        stl: game[21] || 0,         // Steals
-        blk: game[22] || 0,         // Blocks
-        tov: game[25] || 0,         // Turnovers
-        pf: game[26] || 0,          // Personal Fouls
+        fgm: game[16] || 0,         // Field Goals Made
+        min: game[17] || 0,         // Minutes Played
+        tov: game[18] || 0,         // Turnovers
+        pf: game[19] || 0,          // Personal Fouls
+        stl: game[20] || 0,         // Steals
+        blk: game[21] || 0,         // Blocks
+        fg_pct: game[22] || 0,      // Field Goal %
+        fg3_pct: game[23] || 0,     // 3-Point %
+        ft_pct: game[24] || 0,      // Free Throw %
         season: 2025,
       })
     }
