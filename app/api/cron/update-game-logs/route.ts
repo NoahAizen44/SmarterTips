@@ -105,6 +105,7 @@ async function updateTeamGameLogs(teamName: string): Promise<number> {
       if (gameDate <= lastGameDate) continue
 
       // Map the game data to our schema
+      // API indices based on stats.nba.com teamgamelogs response
       gamesToInsert.push({
         team: teamName,
         player_id: game[4],
@@ -112,13 +113,18 @@ async function updateTeamGameLogs(teamName: string): Promise<number> {
         game_date: game[3],
         game_id: game[2],
         position: game[6] || null,
-        pts: game[8] || 0,
-        reb: game[9] || 0,
-        ast: game[10] || 0,
-        '3pm': game[11] || 0,
-        '3pa': game[12] || 0,
-        stl: game[13] || 0,
-        blk: game[14] || 0,
+        gp: game[7] || 1,           // Games Played
+        pts: game[8] || 0,          // Points
+        reb: game[9] || 0,          // Rebounds
+        ast: game[10] || 0,         // Assists
+        '3pm': game[11] || 0,       // 3-Pointers Made
+        '3pa': game[12] || 0,       // 3-Pointers Attempted
+        fga: game[15] || 0,         // Field Goals Attempted
+        fta: game[18] || 0,         // Free Throws Attempted
+        stl: game[21] || 0,         // Steals
+        blk: game[22] || 0,         // Blocks
+        tov: game[25] || 0,         // Turnovers
+        pf: game[26] || 0,          // Personal Fouls
         season: 2025,
       })
     }
