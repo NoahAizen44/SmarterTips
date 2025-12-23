@@ -161,15 +161,18 @@ export async function GET(request: NextRequest) {
     console.log('Starting backfill of game log stats...')
     const startTime = Date.now()
 
+    // Process teams in batches of 5 to avoid timeout
+    const teamNames = Object.keys(TEAM_IDS)
+    const batchSize = 5
     let totalUpdated = 0
 
-    // Backfill each team
-    for (const [teamName] of Object.entries(TEAM_IDS)) {
-      const updated = await backfillTeamStats(teamName)
-      totalUpdated += updated
+    for (let i = 0; i < teamNames.length; i += batchSize) {
+      const batch = teamNames.slice(i, i + batchSize)
+      const batchPromises = batch.map((teamName) => backfillTeamStats(teamName))
+      const batchResults = await Promise.all(batchPromises)
+      totalUpdated += batchResults.reduce((a, b) => a + b, 0)
 
-      // Rate limiting
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      console.log(`Completed batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(teamNames.length / batchSize)}`)
     }
 
     const duration = Math.round((Date.now() - startTime) / 1000)
