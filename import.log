@@ -1,0 +1,79 @@
+🏀 NBA Game Logs Importer (nba_api)
+Season: 2025-26
+==================================================
+
+📥 Importing Atlanta Hawks...
+  👥 Fetching roster... ✅ 16 players
+  [1/16] Jalen Johnson... ✅ 24 games
+  [2/16] Keaton Wallace... ✅ 25 games
+  [3/16] Luke Kennard... ✅ 24 games
+  [4/16] Dyson Daniels... ✅ 27 games
+  [5/16] Nickeil Alexander-Walker... ✅ 25 games
+  [6/16] Kristaps Porziņģis... ✅ 13 games
+  [7/16] Zaccharie Risacher... ✅ 24 games
+  [8/16] Trae Young... ✅ 5 games
+  [9/16] N'Faly Dante... ✅ 4 games
+  [10/16] Asa Newell... ✅ 17 games
+  [11/16] Onyeka Okongwu... ✅ 26 games
+  [12/16] Mouhamed Gueye... ✅ 27 games
+  [13/16] Nikola Đurišić... ⏭️  no games
+  [14/16] Vít Krejčí... ✅ 23 games
+  [15/16] Eli John Ndiaye... ⏭️  no games
+  [16/16] Caleb Houstan... ✅ 8 games
+  📊 Total records: 272
+
+📥 Importing Boston Celtics...
+  👥 Fetching roster... ✅ 17 players
+  [1/17] Jayson Tatum... ⏭️  no games
+  [2/17] Anfernee Simons... ✅ 26 games
+  [3/17] Jaylen Brown... ✅ 25 games
+  [4/17] Josh Minott... ✅ 25 games
+  [5/17] Derrick White... ✅ 25 games
+  [6/17] Payton Pritchard... ✅ 26 games
+  [7/17] Ron Harper Jr.... ✅ 4 games
+  [8/17] Xavier Tillman... ✅ 11 games
+  [9/17] Jordan Walsh... ✅ 22 games
+  [10/17] Hugo González... ✅ 21 games
+  [11/17] Sam Hauser... ✅ 26 games
+  [12/17] Max Shulga... ⏭️  no games
+  [13/17] Luka Garza... ✅ 19 games
+  [14/17] Baylor Scheierman... ✅ 22 games
+  [15/17] Amari Williams... ✅ 6 games
+  [16/17] Neemias Queta... ✅ 24 games
+  [17/17] Chris Boucher... ✅ 8 games
+  📊 Total records: 290
+
+📥 Importing Cleveland Cavaliers...
+  👥 Fetching roster... ✅ 17 players
+  [1/17] Max Strus... ⏭️  no games
+  [2/17] Lonzo Ball... ✅ 21 games
+  [3/17] Thomas Bryant... ✅ 21 games
+  [4/17] Evan Mobley... ✅ 25 games
+  [5/17] Sam Merrill... ✅ 12 games
+  [6/17] Chris Livingston... ✅ 3 games
+  [7/17] Craig Porter Jr.... ✅ 25 games
+  [8/17] Darius Garland... ✅ 12 games
+  [9/17] De'Andre Hunter... ✅ 24 games
+  [10/17] Jaylon Tyson... ✅ 23 games
+  [11/17] Larry Nance Jr.... ✅ 16 games
+  [12/17] Tyrese Proctor... ✅ 20 games
+  [13/17] Jarrett Allen... ✅ 17 games
+  [14/17] Dean Wade... ✅ 26 games
+  [15/17] Luke Travers... ✅ 11 games
+  [16/17] Nae'Qwan Tomlin... ✅ 19 games
+  [17/17] Donovan Mitchell... ✅ 26 games
+  📊 Total records: 301
+
+📥 Importing New Orleans Pelicans...
+  👥 Fetching roster... ✅ 18 players
+  [1/18] Jeremiah Fears... ✅ 27 games
+  [2/18] Zion Williamson... ✅ 11 games
+  [3/18] Herbert Jones... ✅ 19 games
+  [4/18] Jordan Poole... ✅ 9 games
+  [5/18] Hunter Dickinson... ✅ 1 games
+  [6/18] Dejounte Murray... ⏭️  no games
+  [7/18] DeAndre Jordan... ✅ 2 games
+  [8/18] Bryce McGowens... ✅ 17 games
+  [9/18] Micah Peavy... ✅ 22 games
+  [10/18] Jose Alvarado... ✅ 26 games
+  [11/18] Karlo Matković... 
