@@ -38,6 +38,12 @@ jobs:
       run: |
         python3 daily_update_2_usage.py
     
+    - name: Run Daily Update - Step 3 (Game Logs)
+      env:
+        NEON_DSN: ${{ secrets.NEON_DSN }}
+      run: |
+        python3 daily_update_3_game_logs.py
+    
     - name: Notify completion
       if: success()
       run: |

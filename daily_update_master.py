@@ -1,9 +1,10 @@
 """
 Daily Update Master Script
 ===========================
-Runs both daily update scripts in sequence:
+Runs all daily update scripts in sequence:
 1. Updates team schedules with game results and player participation
 2. Updates player usage tables with usage data and DNP entries
+3. Updates player game logs with detailed stats
 
 Usage:
   python3 daily_update_master.py              # Updates today's games
@@ -59,9 +60,17 @@ def main():
     # Step 2: Update usage tables
     success2 = run_script('daily_update_2_usage.py', 'Step 2: Player Usage Tables')
     
+    if not success2:
+        print()
+        print("⚠️  Usage update failed. Stopping here.")
+        return
+    
+    # Step 3: Update game logs
+    success3 = run_script('daily_update_3_game_logs.py', 'Step 3: Player Game Logs')
+    
     print()
     print("=" * 70)
-    if success1 and success2:
+    if success1 and success2 and success3:
         print("✅ Daily update complete! All data is current.")
     else:
         print("⚠️  Daily update completed with some errors.")
