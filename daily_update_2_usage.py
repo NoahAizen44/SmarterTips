@@ -13,7 +13,7 @@ from nba_api.stats.endpoints import boxscoreadvancedv3
 from nba_api.stats.static import teams
 import time
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 # Get database connection from environment variable or use default
 NEON_DSN = os.environ.get('NEON_DSN', "postgresql://neondb_owner:npg_b5ncGCKrBX2k@ep-sweet-scene-a7et4vn2-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require")
@@ -191,8 +191,8 @@ def update_team_usage(team, target_date):
         return 0
 
 def main():
-    # Use today's date or specify a date
-    target_date = date.today()
+    # Use yesterday's date (to capture all completed games regardless of timezone)
+    target_date = date.today() - timedelta(days=1)
     
     print("=" * 70)
     print(f"📊 Daily Update #2: Player Usage Tables for {target_date}")

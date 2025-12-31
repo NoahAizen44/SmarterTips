@@ -14,7 +14,7 @@ from nba_api.stats.static import teams
 import pandas as pd
 import time
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 # Get database connection from environment variable or use default
 NEON_DSN = os.environ.get('NEON_DSN', "postgresql://neondb_owner:npg_b5ncGCKrBX2k@ep-sweet-scene-a7et4vn2-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require")
@@ -169,8 +169,9 @@ def update_team_schedule(team, target_date):
         return 0
 
 def main():
-    # Use today's date or specify a date
-    target_date = date.today()
+    # Use yesterday's date to capture all games that finished
+    # Since script runs at 2 AM EST, yesterday's games are all complete
+    target_date = date.today() - timedelta(days=1)
     
     print("=" * 70)
     print(f"📅 Daily Update #1: Team Schedules for {target_date}")
