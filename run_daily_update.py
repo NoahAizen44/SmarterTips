@@ -32,6 +32,7 @@ STEPS = [
     ("schedule", "daily_update_1_schedule"),
     ("usage", "daily_update_2_usage"),
     ("game_logs", "daily_update_3_game_logs"),
+    ("season_averages", "daily_update_4_season_averages"),
 ]
 
 
