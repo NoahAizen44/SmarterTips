@@ -15,6 +15,7 @@ import pandas as pd
 import time
 import os
 from datetime import datetime, date, timedelta
+import requests
 
 # GitHub runners sometimes get transient timeouts from stats.nba.com.
 # Increase the nba_api request timeout and use retries/backoff to reduce flakiness.
@@ -218,6 +219,139 @@ def fetch_box_score_df(game_id: str):
 
     return retry_with_backoff(_fetch, max_retries=5, initial_delay=2, max_delay=30)
 
+
+def _team_abbrev_to_team_id():
+    """Map NBA team abbreviations to NBA team_id (from nba_api static teams)."""
+    mapping = {}
+    for t in teams.get_teams():
+        mapping[t['abbreviation']] = t['id']
+    return mapping
+
+
+def fetch_games_espn_scoreboard(target_date):
+    """Fetch games from ESPN scoreboard (fallback when stats.nba.com is flaky).
+
+    Returns a list of dicts with keys:
+      - home_abbrev, away_abbrev, home_score, away_score, status, start_date_iso
+    """
+    # ESPN's public scoreboard endpoint lives under `apis/site/v2` (not `apis/v2`).
+    url = "https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+    params = {"dates": target_date.strftime("%Y%m%d")}
+
+    resp = requests.get(url, params=params, timeout=20)
+    resp.raise_for_status()
+    data = resp.json()
+
+    events = data.get("events", []) or []
+    games = []
+    for ev in events:
+        competitions = ev.get("competitions", []) or []
+        if not competitions:
+            continue
+        comp = competitions[0]
+        competitors = comp.get("competitors", []) or []
+        if len(competitors) < 2:
+            continue
+
+        home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+        away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+        if not home or not away:
+            continue
+
+        home_team = home.get("team", {})
+        away_team = away.get("team", {})
+        home_abbrev = home_team.get("abbreviation")
+        away_abbrev = away_team.get("abbreviation")
+
+        # Scores can be missing for not-started games; we only care about completed games
+        try:
+            home_score = int(home.get("score") or 0)
+            away_score = int(away.get("score") or 0)
+        except Exception:
+            home_score = 0
+            away_score = 0
+
+        status = (comp.get("status", {}) or {}).get("type", {}) or {}
+        status_name = status.get("name")  # e.g. STATUS_FINAL
+
+        games.append(
+            {
+                "home_abbrev": home_abbrev,
+                "away_abbrev": away_abbrev,
+                "home_score": home_score,
+                "away_score": away_score,
+                "status_name": status_name,
+                "start_date": comp.get("date"),
+            }
+        )
+
+    return games
+
+
+def apply_espn_fallback_updates(target_date, games):
+    """Update schedule rows using ESPN scoreboard (no player participation updates)."""
+    abbrev_to_team_id = _team_abbrev_to_team_id()
+    updated = 0
+
+    for g in games:
+        if g.get("status_name") not in {"STATUS_FINAL", "STATUS_POSTPONED"}:
+            # Only ingest completed games. (Postponed could appear; skip scoring logic if so.)
+            if g.get("status_name") != "STATUS_FINAL":
+                continue
+
+        home_abbrev = g.get("home_abbrev")
+        away_abbrev = g.get("away_abbrev")
+        if not home_abbrev or not away_abbrev:
+            continue
+
+        home_id = abbrev_to_team_id.get(home_abbrev)
+        away_id = abbrev_to_team_id.get(away_abbrev)
+        if not home_id or not away_id:
+            continue
+
+        # We don't have NBA game_id from ESPN in a stable way; keep existing game_id if present.
+        for team_id, home_away, opponent_abbrev, team_score, opp_score in [
+            (home_id, "Home", away_abbrev, g.get("home_score", 0), g.get("away_score", 0)),
+            (away_id, "Away", home_abbrev, g.get("away_score", 0), g.get("home_score", 0)),
+        ]:
+            # derive schema name from team static list
+            team = next((t for t in teams.get_teams() if t['id'] == team_id), None)
+            if not team:
+                continue
+            schema_name = team['full_name'].lower().replace(' ', '_')
+
+            result = 'W' if (team_score or 0) > (opp_score or 0) else 'L'
+
+            conn = psycopg2.connect(NEON_DSN)
+            cur = conn.cursor()
+            try:
+                # Ensure row exists; preserve existing game_id if already present
+                cur.execute(f"""
+                    INSERT INTO {schema_name}.schedule (game_date)
+                    VALUES (%s)
+                    ON CONFLICT (game_date) DO NOTHING
+                """, (target_date,))
+
+                cur.execute(f"""
+                    UPDATE {schema_name}.schedule
+                    SET result = %s,
+                        team_score = %s,
+                        opponent_score = %s,
+                        opponent = %s,
+                        home_away = %s
+                    WHERE game_date = %s
+                """, (result, int(team_score or 0), int(opp_score or 0), opponent_abbrev, home_away, target_date))
+
+                conn.commit()
+                updated += 1
+            except Exception as e:
+                print(f"  ❌ ESPN fallback DB update error for {schema_name}: {e}")
+            finally:
+                cur.close()
+                conn.close()
+
+    return updated
+
 def main():
     # Use yesterday's date to capture all games that finished
     # Since script runs at 2 AM EST, yesterday's games are all complete
@@ -245,7 +379,18 @@ def main():
         games_df = pd.DataFrame()
 
     if games_df is None or games_df.empty:
-        # No games yesterday (rare) OR leaguewide fetch failed; in either case fall back.
+        # stats.nba.com is flaky on GitHub runners. Try an ESPN scoreboard fallback so
+        # schedules still get score/opponent/home-away/result populated.
+        print("⚠️  No league-wide games returned from stats.nba.com. Trying ESPN fallback...")
+        try:
+            espn_games = fetch_games_espn_scoreboard(target_date)
+            updated = apply_espn_fallback_updates(target_date, espn_games)
+            print(f"✅ ESPN fallback updated {updated} team schedule rows")
+            teams_updated += updated
+        except Exception as e:
+            print(f"❌ ESPN fallback failed: {e}")
+
+        # As a last resort, fall back to per-team requests.
         for idx, team in enumerate(sorted(all_teams, key=lambda x: x['full_name']), 1):
             team_name = team['full_name']
             print(f"[{idx}/30] {team_name}...", end=" ", flush=True)
