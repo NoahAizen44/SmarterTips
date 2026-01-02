@@ -53,20 +53,7 @@ def update_team_schedule(team, target_date):
     cur = conn.cursor()
     
     try:
-        # Check if this date already has complete data in schedule
-        cur.execute(f"""
-            SELECT game_id, result 
-            FROM {schema_name}.schedule 
-            WHERE game_date = %s
-        """, (target_date,))
-
-        existing = cur.fetchone()
-        if existing and existing[1]:  # If result is already filled
-            print(f"  ✓ Already updated")
-            cur.close()
-            conn.close()
-            return 0
-        
+        # Always try to update (ON CONFLICT will handle existing data)
         # Get games for this team on this date
         def fetch_games():
             games = leaguegamefinder.LeagueGameFinder(

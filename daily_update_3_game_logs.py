@@ -38,27 +38,14 @@ def update_team_game_logs(team, target_date):
         
         game_id = game_result[0]
         
-        # Check if we already have logs for this game
-        cur.execute(f"""
-            SELECT COUNT(*) 
-            FROM {schema_name}.player_game_logs 
-            WHERE game_id = %s
-        """, (game_id,))
-        
-        existing_count = cur.fetchone()[0]
-        if existing_count > 0:
-            print(f"Already filled ({existing_count} players)")
-            cur.close()
-            conn.close()
-            return 0
-        
-        # Fetch game logs from NBA API
+        # Fetch game logs from NBA API (ON CONFLICT will upsert if records already exist)
         try:
             game_logs = playergamelogs.PlayerGameLogs(
                 team_id_nullable=team_id,
                 date_from_nullable=date_from,
                 date_to_nullable=date_to,
-                season_nullable='2024-25'
+                season_nullable='2025-26',
+                season_type_nullable='Regular Season'  # Exclude preseason/playoffs
             )
             logs_df = game_logs.get_data_frames()[0]
             
@@ -88,29 +75,31 @@ def update_team_game_logs(team, target_date):
         for _, row in logs_df.iterrows():
             player_name = row['PLAYER_NAME']
             
-            # Convert minutes string (e.g., "25:30") to decimal
-            minutes_str = row['MIN']
-            if minutes_str and ':' in str(minutes_str):
-                parts = str(minutes_str).split(':')
-                minutes = int(parts[0]) + (int(parts[1]) / 60.0)
-            else:
-                minutes = 0
+            # Minutes is already a decimal from the API (e.g., 36.283333)
+            minutes = float(row['MIN']) if row['MIN'] else 0.0
             
             # Insert with ON CONFLICT to handle duplicates
             cur.execute(f"""
                 INSERT INTO {schema_name}.player_game_logs (
-                    player_name, game_id, game_date, matchup, wl,
+                    player_id, player_name, nickname, team_abbreviation,
+                    game_id, game_date, matchup, wl,
                     min, fgm, fga, fg_pct, fg3m, fg3a, fg3_pct,
-                    ftm, fta, ft_pct, oreb, dreb, reb, ast, stl,
-                    blk, tov, pf, pts, plus_minus
+                    ftm, fta, ft_pct, oreb, dreb, reb, ast, tov, stl,
+                    blk, blka, pf, pfd, pts, plus_minus,
+                    nba_fantasy_pts, dd2, td3
                 ) VALUES (
-                    %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s
                 )
-                ON CONFLICT (player_name, game_id) DO UPDATE SET
-                    game_date = EXCLUDED.game_date,
+                ON CONFLICT (player_name, game_date) DO UPDATE SET
+                    player_id = EXCLUDED.player_id,
+                    nickname = EXCLUDED.nickname,
+                    team_abbreviation = EXCLUDED.team_abbreviation,
+                    game_id = EXCLUDED.game_id,
                     matchup = EXCLUDED.matchup,
                     wl = EXCLUDED.wl,
                     min = EXCLUDED.min,
@@ -127,17 +116,26 @@ def update_team_game_logs(team, target_date):
                     dreb = EXCLUDED.dreb,
                     reb = EXCLUDED.reb,
                     ast = EXCLUDED.ast,
+                    tov = EXCLUDED.tov,
                     stl = EXCLUDED.stl,
                     blk = EXCLUDED.blk,
-                    tov = EXCLUDED.tov,
+                    blka = EXCLUDED.blka,
                     pf = EXCLUDED.pf,
+                    pfd = EXCLUDED.pfd,
                     pts = EXCLUDED.pts,
-                    plus_minus = EXCLUDED.plus_minus
+                    plus_minus = EXCLUDED.plus_minus,
+                    nba_fantasy_pts = EXCLUDED.nba_fantasy_pts,
+                    dd2 = EXCLUDED.dd2,
+                    td3 = EXCLUDED.td3
             """, (
-                player_name, game_id, target_date, row['MATCHUP'], row['WL'],
-                minutes, row['FGM'], row['FGA'], row['FG_PCT'], row['FG3M'], row['FG3A'], row['FG3_PCT'],
-                row['FTM'], row['FTA'], row['FT_PCT'], row['OREB'], row['DREB'], row['REB'], row['AST'], row['STL'],
-                row['BLK'], row['TOV'], row['PF'], row['PTS'], row['PLUS_MINUS']
+                int(row['PLAYER_ID']), player_name, row['NICKNAME'], row['TEAM_ABBREVIATION'],
+                game_id, target_date, row['MATCHUP'], row['WL'],
+                minutes, int(row['FGM']), int(row['FGA']), float(row['FG_PCT']) if row['FG_PCT'] else None,
+                int(row['FG3M']), int(row['FG3A']), float(row['FG3_PCT']) if row['FG3_PCT'] else None,
+                int(row['FTM']), int(row['FTA']), float(row['FT_PCT']) if row['FT_PCT'] else None,
+                int(row['OREB']), int(row['DREB']), int(row['REB']), int(row['AST']), int(row['TOV']), int(row['STL']),
+                int(row['BLK']), int(row['BLKA']), int(row['PF']), int(row['PFD']), int(row['PTS']), float(row['PLUS_MINUS']) if row['PLUS_MINUS'] else None,
+                float(row['NBA_FANTASY_PTS']) if row['NBA_FANTASY_PTS'] else None, int(row['DD2']), int(row['TD3'])
             ))
             inserted += 1
         
