@@ -43,8 +43,10 @@ def process_team(team_data):
     team_name = team['full_name']
     schema_name = team_name.lower().replace(' ', '_')
     
-    # Each thread gets its own database connection
-    conn = psycopg2.connect(NEON_DSN)
+    # Each thread gets its own database connection.
+    # Neon can occasionally time out; retry with backoff so one transient issue
+    # doesn't cause a whole team to fail (e.g., Knicks).
+    conn = retry_with_backoff(lambda: psycopg2.connect(NEON_DSN), max_retries=5, initial_delay=2)
     cur = conn.cursor()
     
     try:
@@ -61,11 +63,13 @@ def process_team(team_data):
                                      'result', 'team_score', 'opponent_score', 'created_at')
             ORDER BY column_name
         """)
-        
+
         player_columns = [row[0] for row in cur.fetchall()]
-        players = [col.replace('_', ' ').title() for col in player_columns]
-        
-        print(f"  → {len(players)} players in roster")
+        # Use normalized roster keys (column/table name style) for matching.
+        # This avoids name formatting mismatches like "Jr" vs "Jr.".
+        roster_keys = set(player_columns)
+
+        print(f"  → {len(roster_keys)} players in roster")
         
         # Get team games
         def fetch_games():
@@ -94,7 +98,8 @@ def process_team(team_data):
                     adv_box = boxscoreadvancedv3.BoxScoreAdvancedV3(game_id=game_id)
                     return adv_box.get_data_frames()[0]
                 
-                adv_df = retry_with_backoff(fetch_advanced, max_retries=3, initial_delay=2)
+                # NBA API can be flaky; retry a bit more aggressively to avoid silent gaps.
+                adv_df = retry_with_backoff(fetch_advanced, max_retries=6, initial_delay=2)
                 
                 # Filter for this team's players
                 team_players = adv_df[adv_df['teamId'] == team_id]
@@ -103,9 +108,10 @@ def process_team(team_data):
                 inserted = 0
                 for _, player in team_players.iterrows():
                     player_name = f"{player['firstName']} {player['familyName']}"
-                    
-                    # Only insert if player is in our roster
-                    if player_name not in players:
+
+                    # Only insert if player is in our roster (normalize before matching)
+                    table_name = normalize_name(player_name)
+                    if table_name not in roster_keys:
                         continue
                     
                     usage_pct = player['usagePercentage'] * 100
@@ -116,8 +122,6 @@ def process_team(team_data):
                         time_parts = str(player['minutes']).split(':')
                         if len(time_parts) == 2:
                             minutes_played = int(time_parts[0]) + int(time_parts[1])/60
-                    
-                    table_name = normalize_name(player_name)
                     
                     cur.execute(f"""
                         INSERT INTO {schema_name}.{table_name} (game_date, minutes, usage_percentage)
@@ -134,18 +138,18 @@ def process_team(team_data):
                 time.sleep(1.5)  # Rate limit
                 
             except Exception as e:
-                print(f"skipped")
+                print(f"skipped ({type(e).__name__})")
                 time.sleep(1)
                 continue
-        
-        print(f"  ✅ Filled {len(players)} player usage tables ({games_processed} games)")
-        
+
+        print(f"  ✅ Filled {len(roster_keys)} player usage tables ({games_processed} games)")
+
         # Update global progress counter
         global teams_completed
         with progress_lock:
             teams_completed += 1
             print(f"\n  📊 Overall progress: {teams_completed}/{total_teams} teams completed")
-        
+
         return (team_name, games_processed, None)
         
     except Exception as e:
@@ -166,10 +170,20 @@ def main():
     all_teams = teams.get_teams()
     sorted_teams = sorted(all_teams, key=lambda x: x['full_name'])
     
-    # Only process the last 3 teams
-    remaining_teams = ['Toronto Raptors', 'Utah Jazz', 'Washington Wizards']
-    sorted_teams = [t for t in sorted_teams if t['full_name'] in remaining_teams]
-    
+    # Optional controls:
+    # - LIMIT_TEAMS: run only these team full names
+    # - RESUME_FROM_TEAM: start from this team (inclusive) in alphabetical order
+    # Example:
+    #   LIMIT_TEAMS = ['Brooklyn Nets']
+    #   RESUME_FROM_TEAM = 'Portland Trail Blazers'
+    LIMIT_TEAMS = None
+    RESUME_FROM_TEAM = 'Portland Trail Blazers'
+
+    if LIMIT_TEAMS:
+        sorted_teams = [t for t in sorted_teams if t['full_name'] in LIMIT_TEAMS]
+    elif RESUME_FROM_TEAM:
+        sorted_teams = [t for t in sorted_teams if t['full_name'] >= RESUME_FROM_TEAM]
+
     global total_teams
     total_teams = len(sorted_teams)
     

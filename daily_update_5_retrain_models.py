@@ -11,8 +11,11 @@ import psycopg2
 import pandas as pd
 import statsmodels.api as sm
 import os
+import warnings
 from datetime import datetime
-from save_model_coefficients import save_coefficients
+
+# Suppress pandas SQLAlchemy warnings
+warnings.filterwarnings('ignore', message='pandas only supports SQLAlchemy')
 
 # Get database connection from environment variable or use default
 NEON_DSN = os.environ.get('NEON_DSN', "postgresql://neondb_owner:npg_b5ncGCKrBX2k@ep-sweet-scene-a7et4vn2-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require")
@@ -21,7 +24,7 @@ NEON_DSN = os.environ.get('NEON_DSN', "postgresql://neondb_owner:npg_b5ncGCKrBX2
 TEAMS = [
     'atlanta_hawks', 'boston_celtics', 'brooklyn_nets', 'charlotte_hornets', 'chicago_bulls',
     'cleveland_cavaliers', 'dallas_mavericks', 'denver_nuggets', 'detroit_pistons', 'golden_state_warriors',
-    'houston_rockets', 'indiana_pacers', 'la_clippers', 'los_angeles_lakers', 'memphis_grizzlies',
+    'houston_rockets', 'indiana_pacers', 'los_angeles_clippers', 'los_angeles_lakers', 'memphis_grizzlies',
     'miami_heat', 'milwaukee_bucks', 'minnesota_timberwolves', 'new_orleans_pelicans', 'new_york_knicks',
     'oklahoma_city_thunder', 'orlando_magic', 'philadelphia_76ers', 'phoenix_suns', 'portland_trail_blazers',
     'sacramento_kings', 'san_antonio_spurs', 'toronto_raptors', 'utah_jazz', 'washington_wizards'
@@ -30,6 +33,38 @@ TEAMS = [
 # Qualification criteria
 MIN_MPG = 22.0
 MIN_GAMES_MISSED = 3
+
+
+def save_coefficients(conn, player_col, player_name, team_name, teammate_name, 
+                     usage_delta, baseline_usage, p_value, games_used, r_squared, 
+                     model_version='additive_v1'):
+    """Save a single coefficient to the database."""
+    cursor = conn.cursor()
+    
+    # Convert numpy types to Python types
+    usage_delta = float(usage_delta)
+    baseline_usage = float(baseline_usage)
+    p_value = float(p_value) if p_value is not None else None
+    r_squared = float(r_squared)
+    
+    # Upsert the coefficient
+    cursor.execute("""
+        INSERT INTO public.usage_model_coefficients 
+        (player_name, team_name, teammate_name, usage_delta, baseline_usage, 
+         p_value, games_used, r_squared, model_version, timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+        ON CONFLICT (player_name, teammate_name, model_version) 
+        DO UPDATE SET
+            usage_delta = EXCLUDED.usage_delta,
+            baseline_usage = EXCLUDED.baseline_usage,
+            p_value = EXCLUDED.p_value,
+            games_used = EXCLUDED.games_used,
+            r_squared = EXCLUDED.r_squared,
+            timestamp = CURRENT_TIMESTAMP
+    """, (player_name, team_name, teammate_name, usage_delta, baseline_usage,
+          p_value, games_used, r_squared, model_version))
+    
+    conn.commit()
 
 
 def get_qualifying_players(conn, team_schema):
@@ -65,12 +100,13 @@ def train_usage_model(conn, team_schema, target_player_col, teammate_cols):
     """Train OLS model for target player's usage based on teammate participation."""
     query = f"""
     SELECT 
-        game_date,
-        {target_player_col}_usage as target_usage,
-        {', '.join([f'{tm} as {tm}_played' for tm in teammate_cols])}
+        s.game_date,
+        u.usage_percentage as target_usage,
+        {', '.join([f's.{tm} as {tm}_played' for tm in teammate_cols])}
     FROM {team_schema}.schedule s
-    WHERE {target_player_col} = TRUE
-    ORDER BY game_date
+    JOIN {team_schema}.{target_player_col} u ON s.game_date = u.game_date
+    WHERE s.{target_player_col} = TRUE
+    ORDER BY s.game_date
     """
     
     try:
