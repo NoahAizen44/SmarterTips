@@ -52,7 +52,7 @@ def update_team_schedule(team, target_date):
             FROM {schema_name}.schedule 
             WHERE game_date = %s
         """, (target_date,))
-        
+
         existing = cur.fetchone()
         if existing and existing[1]:  # If result is already filled
             print(f"  ✓ Already updated")
@@ -80,6 +80,15 @@ def update_team_schedule(team, target_date):
         game_row = games_df.iloc[0]
         game_id = str(game_row['GAME_ID'])
         game_date = pd.to_datetime(game_row['GAME_DATE']).date()
+
+        # Ensure a schedule row exists for this game_date (daily updater previously assumed
+        # it already existed, which breaks once new games extend beyond the initial backfill).
+        cur.execute(f"""
+            INSERT INTO {schema_name}.schedule (game_date, game_id)
+            VALUES (%s, %s)
+            ON CONFLICT (game_date) DO UPDATE SET
+                game_id = EXCLUDED.game_id
+        """, (game_date, game_id))
         
         # Get box score to determine player participation
         def fetch_box_score():
