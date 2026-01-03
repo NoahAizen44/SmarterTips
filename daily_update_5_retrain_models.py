@@ -97,12 +97,16 @@ def normalize_name(name):
 
 
 def train_usage_model(conn, team_schema, target_player_col, teammate_cols):
-    """Train OLS model for target player's usage based on teammate participation."""
+    """Train OLS model for target player's usage based on teammate participation.
+    
+    Encoding: 0 = teammate played (healthy), 1 = teammate was out (absent)
+    This makes the intercept represent baseline usage when everyone is healthy.
+    """
     query = f"""
     SELECT 
         s.game_date,
         u.usage_percentage as target_usage,
-        {', '.join([f's.{tm} as {tm}_played' for tm in teammate_cols])}
+        {', '.join([f'(NOT s.{tm})::int as {tm}_out' for tm in teammate_cols])}
     FROM {team_schema}.schedule s
     JOIN {team_schema}.{target_player_col} u ON s.game_date = u.game_date
     WHERE s.{target_player_col} = TRUE
@@ -115,8 +119,8 @@ def train_usage_model(conn, team_schema, target_player_col, teammate_cols):
         if len(df) < 10:
             return None
         
-        # Prepare features
-        X = df[[f'{tm}_played' for tm in teammate_cols]].astype(int)
+        # Prepare features: 1 = teammate out, 0 = teammate played
+        X = df[[f'{tm}_out' for tm in teammate_cols]]
         X = sm.add_constant(X)
         y = df['target_usage']
         
@@ -168,7 +172,7 @@ def train_models_for_team(conn, team_schema):
         
         # Save coefficients for each teammate
         for teammate_col in teammate_cols:
-            coeff_key = f'{teammate_col}_played'
+            coeff_key = f'{teammate_col}_out'
             if coeff_key not in model.params:
                 continue
             
