@@ -218,6 +218,19 @@ def main():
     total_players = 0
     
     for idx, team in enumerate(sorted(all_teams, key=lambda x: x['full_name']), 1):
+        # Refresh connection every 5 teams to avoid pooler timeout
+        if idx % 5 == 1:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.close()
+            except:
+                try:
+                    conn.close()
+                except:
+                    pass
+                conn = psycopg2.connect(NEON_DSN)
+        
         team_id = team['id']
         team_name = team['full_name']
         team_schema = team_name.lower().replace(' ', '_')
@@ -236,6 +249,12 @@ def main():
                 
         except Exception as e:
             print(f"❌ Error: {e}")
+            # Refresh connection after error
+            try:
+                conn.close()
+            except:
+                pass
+            conn = psycopg2.connect(NEON_DSN)
             continue
     
     conn.close()
