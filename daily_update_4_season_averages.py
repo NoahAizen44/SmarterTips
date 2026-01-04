@@ -218,18 +218,17 @@ def main():
     total_players = 0
     
     for idx, team in enumerate(sorted(all_teams, key=lambda x: x['full_name']), 1):
-        # Refresh connection every 5 teams to avoid pooler timeout
-        if idx % 5 == 1:
+        # Refresh connection before each team to handle NBA API timeouts
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            cursor.close()
+        except:
             try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT 1")
-                cursor.close()
+                conn.close()
             except:
-                try:
-                    conn.close()
-                except:
-                    pass
-                conn = psycopg2.connect(NEON_DSN)
+                pass
+            conn = psycopg2.connect(NEON_DSN)
         
         team_id = team['id']
         team_name = team['full_name']
