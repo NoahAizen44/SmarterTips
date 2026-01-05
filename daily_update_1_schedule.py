@@ -113,7 +113,8 @@ def update_team_schedule(team, target_date):
             WHERE table_schema = '{schema_name}' 
             AND table_name = 'schedule'
             AND column_name NOT IN ('game_date', 'game_id', 'opponent', 'home_away', 
-                                     'result', 'team_score', 'opponent_score', 'created_at')
+                                     'result', 'team_score', 'opponent_score', 'created_at',
+                                     'missing_usage', 'injury_weight', 'games_ago', 'recency_weight')
         """)
         
         all_player_columns = [row[0] for row in cur.fetchall()]
@@ -456,7 +457,8 @@ def main():
                     WHERE table_schema = %s
                       AND table_name = 'schedule'
                       AND column_name NOT IN ('game_date', 'game_id', 'opponent', 'home_away',
-                                             'result', 'team_score', 'opponent_score', 'created_at')
+                                             'result', 'team_score', 'opponent_score', 'created_at',
+                                             'missing_usage', 'injury_weight', 'games_ago', 'recency_weight')
                 """, (schema_name,))
                 all_player_columns = [r[0] for r in cur.fetchall()]
 
@@ -492,6 +494,51 @@ def main():
                     WHERE game_date = %s
                 """
                 cur.execute(update_sql, (result, team_score, opponent_score, opponent, home_away, game_date))
+
+                # Calculate weight columns for this game
+                # 1. Update games_ago and recency_weight for ALL games
+                cur.execute(f"""
+                    WITH ranked_games AS (
+                        SELECT 
+                            game_date,
+                            ROW_NUMBER() OVER (ORDER BY game_date DESC) - 1 AS new_games_ago
+                        FROM {schema_name}.schedule
+                    )
+                    UPDATE {schema_name}.schedule s
+                    SET 
+                        games_ago = rg.new_games_ago,
+                        recency_weight = EXP(-rg.new_games_ago::numeric / 10)
+                    FROM ranked_games rg
+                    WHERE s.game_date = rg.game_date
+                """)
+                
+                # 2. Calculate missing_usage for this game using current baseline coefficients
+                cur.execute(f"""
+                    SELECT player_name, baseline_coefficient, avg_minutes
+                    FROM {schema_name}.baseline_coefficients
+                """)
+                baseline_data = {normalize_name(row[0]): {'coef': float(row[1] or 0), 'min': float(row[2] or 30)} for row in cur.fetchall()}
+                
+                # Get player statuses for this game
+                player_cols_str = ', '.join(all_player_columns)
+                cur.execute(f"SELECT {player_cols_str} FROM {schema_name}.schedule WHERE game_date = %s", (game_date,))
+                statuses = cur.fetchone()
+                
+                missing_usage = 0.0
+                for i, col in enumerate(all_player_columns):
+                    if statuses[i] == False and col in baseline_data:  # Player is OUT
+                        coef = baseline_data[col]['coef']
+                        avg_min = baseline_data[col]['min']
+                        missing_usage += coef * min(1.0, avg_min / 30.0)
+                
+                # 3. Update missing_usage and injury_weight for this game
+                injury_weight = 1.0 / (1.0 + missing_usage / 100.0)
+                cur.execute(f"""
+                    UPDATE {schema_name}.schedule
+                    SET missing_usage = %s, injury_weight = %s
+                    WHERE game_date = %s
+                """, (missing_usage, injury_weight, game_date))
+                
                 conn.commit()
 
                 print(f"✅ {result} {team_score}-{opponent_score} vs {opponent} ({len(players_who_played)} players)")
