@@ -163,6 +163,113 @@ def update_team_schedule(team, target_date):
         
         cur.execute(update_sql, (result, team_score, opponent_score, opponent, home_away, game_date))
         conn.commit()
+        # BEGIN: recalc baseline coefficients (minutes-weighted)
+        # Calculate weight columns for this game
+        # 1. Update games_ago and recency_weight for ALL games
+        cur.execute(f"""
+            WITH ranked_games AS (
+                SELECT 
+                    game_date,
+                    ROW_NUMBER() OVER (ORDER BY game_date DESC) - 1 AS new_games_ago
+                FROM {schema_name}.schedule
+            )
+            UPDATE {schema_name}.schedule s
+            SET 
+                games_ago = rg.new_games_ago,
+                recency_weight = EXP(-rg.new_games_ago::numeric / 10)
+            FROM ranked_games rg
+            WHERE s.game_date = rg.game_date
+        """)
+
+        # 2. Calculate missing_usage for this game using current baseline coefficients
+        cur.execute(f"""
+            SELECT player_name, baseline_coefficient, avg_minutes
+            FROM {schema_name}.baseline_coefficients
+        """)
+        baseline_data = {normalize_name(row[0]): {'coef': float(row[1] or 0), 'min': float(row[2] or 30)} for row in cur.fetchall()}
+
+        # Get player statuses for this game
+        player_cols_str = ', '.join(all_player_columns)
+        cur.execute(f"SELECT {player_cols_str} FROM {schema_name}.schedule WHERE game_date = %s", (game_date,))
+        statuses = cur.fetchone()
+
+        missing_usage = 0.0
+        for i, col in enumerate(all_player_columns):
+            if statuses[i] == False and col in baseline_data:  # Player is OUT
+                coef = baseline_data[col]['coef']
+                avg_min = baseline_data[col]['min']
+                missing_usage += coef * min(1.0, avg_min / 30.0)
+
+        # 3. Update missing_usage and injury_weight for this game
+        injury_weight = 1.0 / (1.0 + missing_usage / 100.0)
+        cur.execute(f"""
+            UPDATE {schema_name}.schedule
+            SET missing_usage = %s, injury_weight = %s
+            WHERE game_date = %s
+        """, (missing_usage, injury_weight, game_date))
+
+        # 4. Recalculate baseline coefficients using weighted formula (with minutes)
+        # For each player, query their individual table and join with schedule weights
+        player_weighted_values = {}
+        
+        for player_col in all_player_columns:
+            try:
+                # Query player's individual table joined with schedule for weights
+                cur.execute(f"""
+                    SELECT p.game_date, p.minutes, p.usage_percentage,
+                           s.injury_weight, s.recency_weight
+                    FROM {schema_name}.{player_col} p
+                    JOIN {schema_name}.schedule s ON p.game_date = s.game_date
+                    WHERE p.minutes > 0 
+                    AND s.injury_weight IS NOT NULL 
+                    AND s.recency_weight IS NOT NULL
+                    ORDER BY p.game_date DESC
+                """)
+                
+                player_games = cur.fetchall()
+                
+                if not player_games:
+                    continue
+                
+                weighted_sum = 0.0
+                weight_sum = 0.0
+                
+                for game in player_games:
+                    minutes = float(game[1])
+                    usage = float(game[2])
+                    inj_weight = float(game[3])
+                    rec_weight = float(game[4])
+                    
+                    # Weight = minutes × injury_weight × recency_weight
+                    weight = minutes * inj_weight * rec_weight
+                    
+                    weighted_sum += usage * weight
+                    weight_sum += weight
+                
+                if weight_sum > 0:
+                    player_weighted_values[player_col] = {
+                        'weighted_sum': weighted_sum,
+                        'weight_sum': weight_sum
+                    }
+            except Exception as e:
+                # Player table might not exist yet
+                continue
+        
+        # Calculate and update baseline coefficients
+        total_weight = sum(p['weight_sum'] for p in player_weighted_values.values())
+        
+        if total_weight > 0:
+            for player_col, values in player_weighted_values.items():
+                baseline_usage = values['weighted_sum'] / values['weight_sum']
+                new_coefficient = (values['weight_sum'] / total_weight) * 100.0
+                
+                # Update baseline_coefficients table
+                cur.execute(f"""
+                    UPDATE {schema_name}.baseline_coefficients
+                    SET baseline_coefficient = %s, last_updated = CURRENT_TIMESTAMP
+                    WHERE player_col = %s
+                """, (new_coefficient, player_col))
+        # END: recalc baseline coefficients (minutes-weighted)
         
         print(f"  ✅ Updated: {result} {team_score}-{opponent_score} vs {opponent} ({len(players_who_played)} players)")
         
@@ -538,6 +645,68 @@ def main():
                     SET missing_usage = %s, injury_weight = %s
                     WHERE game_date = %s
                 """, (missing_usage, injury_weight, game_date))
+                
+                # 4. Recalculate baseline coefficients using weighted formula (with minutes)
+                # For each player, query their individual table and join with schedule weights
+                player_weighted_values = {}
+                
+                for player_col in all_player_columns:
+                    try:
+                        # Query player's individual table joined with schedule for weights
+                        cur.execute(f"""
+                            SELECT p.game_date, p.minutes, p.usage_percentage,
+                                   s.injury_weight, s.recency_weight
+                            FROM {schema_name}.{player_col} p
+                            JOIN {schema_name}.schedule s ON p.game_date = s.game_date
+                            WHERE p.minutes > 0 
+                            AND s.injury_weight IS NOT NULL 
+                            AND s.recency_weight IS NOT NULL
+                            ORDER BY p.game_date DESC
+                        """)
+                        
+                        player_games = cur.fetchall()
+                        
+                        if not player_games:
+                            continue
+                        
+                        weighted_sum = 0.0
+                        weight_sum = 0.0
+                        
+                        for game in player_games:
+                            minutes = float(game[1])
+                            usage = float(game[2])
+                            inj_weight = float(game[3])
+                            rec_weight = float(game[4])
+                            
+                            # Weight = minutes × injury_weight × recency_weight
+                            weight = minutes * inj_weight * rec_weight
+                            
+                            weighted_sum += usage * weight
+                            weight_sum += weight
+                        
+                        if weight_sum > 0:
+                            player_weighted_values[player_col] = {
+                                'weighted_sum': weighted_sum,
+                                'weight_sum': weight_sum
+                            }
+                    except Exception as e:
+                        # Player table might not exist yet
+                        continue
+                
+                # Calculate and update baseline coefficients
+                total_weight = sum(p['weight_sum'] for p in player_weighted_values.values())
+                
+                if total_weight > 0:
+                    for player_col, values in player_weighted_values.items():
+                        baseline_usage = values['weighted_sum'] / values['weight_sum']
+                        new_coefficient = (values['weight_sum'] / total_weight) * 100.0
+                        
+                        # Update baseline_coefficients table
+                        cur.execute(f"""
+                            UPDATE {schema_name}.baseline_coefficients
+                            SET baseline_coefficient = %s, last_updated = CURRENT_TIMESTAMP
+                            WHERE player_col = %s
+                        """, (new_coefficient, player_col))
                 
                 conn.commit()
 
