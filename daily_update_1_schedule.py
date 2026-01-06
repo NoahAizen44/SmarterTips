@@ -450,7 +450,7 @@ def apply_espn_fallback_updates(target_date, games):
 def main():
     # Use yesterday's date to capture all games that finished
     # Since script runs at 2 AM EST, yesterday's games are all complete
-    target_date = date.today() - timedelta(days=1)
+    target_date = date(2026, 1, 4)  # TESTING: Jan 4
     
     print("=" * 70)
     print(f"📅 Daily Update #1: Team Schedules for {target_date}")
